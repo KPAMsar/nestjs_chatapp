@@ -11,16 +11,31 @@
     <button onclick="sendMessage()">Send</button>
 
     <script>
-      const socket = new WebSocket('http://127.0.0.1:3009/');
+      const socket = new WebSocket('https://nice-red-scarab-veil.cyclic.app/'); // Replace with your WebSocket server URL
+
       socket.addEventListener('open', (event) => {
         console.log('WebSocket connection opened', event);
+        // Fetch initial messages once the WebSocket connection is established
+        socket.send(JSON.stringify({ event: 'fetchInitialMessages' }));
       });
 
       socket.addEventListener('message', (event) => {
+        const data = JSON.parse(event.data);
         const messagesDiv = document.getElementById('messages');
-        const message = document.createElement('p');
-        message.textContent = event.data;
-        messagesDiv.appendChild(message);
+
+        if (data.event === 'initialMessages') {
+          // Display initial messages
+          data.messages.forEach((message) => {
+            const messageElement = document.createElement('p');
+            messageElement.textContent = message;
+            messagesDiv.appendChild(messageElement);
+          });
+        } else {
+          // Handle other events (e.g., new messages)
+          const messageElement = document.createElement('p');
+          messageElement.textContent = data.message;
+          messagesDiv.appendChild(messageElement);
+        }
       });
 
       socket.addEventListener('close', (event) => {
@@ -31,7 +46,7 @@
         const messageInput = document.getElementById('messageInput');
         const message = messageInput.value;
         socket.send(message);
-        messageInput.value = ''; // Clear input field after sending message
+        messageInput.value = '';
       }
     </script>
   </body>

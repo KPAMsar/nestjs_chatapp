@@ -26,6 +26,24 @@ export class MessageGateway {
     return message;
   }
 
+  @SubscribeMessage('privateMessage')
+  async privateMessage(
+    @MessageBody() { to, message }: { to: string; message: string },
+    @ConnectedSocket() sender: Socket,
+  ) {
+    const senderName = await this.messageService.getClientByName(sender.id);
+    const receiver = await this.messageService.getClientByName(to);
+
+    if (receiver) {
+      this.server
+        .to(receiver.id)
+        .emit('privateMessage', { from: senderName, message });
+      sender.emit('privateMessage', { to: receiver.name, message });
+    } else {
+      sender.emit('privateMessageError', `User ${to} not found`);
+    }
+  }
+
   @SubscribeMessage('findAllMessage')
   findAll() {
     return this.messageService.findAll();
@@ -37,6 +55,11 @@ export class MessageGateway {
     @ConnectedSocket() client: Socket,
   ) {
     return this.messageService.identify(name, client.id);
+  }
+
+  @SubscribeMessage('disconnect')
+  handleDisconnect(@ConnectedSocket() client: Socket) {
+    this.server.emit('message', `User ${client.id} has left the chat`);
   }
 
   @SubscribeMessage('typing')
