@@ -8,6 +8,7 @@ import {
 import { MessageService } from './message.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { Server, Socket } from 'socket.io';
+// import { Body } from '@nestjs/common';
 @WebSocketGateway({
   cors: {
     origin: '*',
@@ -19,54 +20,60 @@ export class MessageGateway {
 
   constructor(private readonly messageService: MessageService) {}
 
+  // Event handler for 'createMessage' WebSocket event
   @SubscribeMessage('createMessage')
-  async create(@MessageBody() createMessageDto: CreateMessageDto) {
-    const message = await this.messageService.create(createMessageDto);
-    this.server.emit('message', message);
-    return message;
-  }
-
-  @SubscribeMessage('privateMessage')
-  async privateMessage(
-    @MessageBody() { to, message }: { to: string; message: string },
-    @ConnectedSocket() sender: Socket,
+  async create(
+    @MessageBody() createMessageDto: CreateMessageDto,
+    client: Socket,
   ) {
-    const senderName = await this.messageService.getClientByName(sender.id);
-    const receiver = await this.messageService.getClientByName(to);
+    // Call messageService to create a new message
+    const message = await this.messageService.create(createMessageDto, '');
+    const clientId = client;
+    console.log('cle', clientId);
+    // Emit the new message to all connected clients
+    this.server.sockets.emit('message', message);
 
-    if (receiver) {
-      this.server
-        .to(receiver.id)
-        .emit('privateMessage', { from: senderName, message });
-      sender.emit('privateMessage', { to: receiver.name, message });
-    } else {
-      sender.emit('privateMessageError', `User ${to} not found`);
-    }
+    // Return the created message
+    return message;
   }
 
   @SubscribeMessage('findAllMessage')
   findAll() {
-    return this.messageService.findAll();
+    // Call messageService to retrieve all messages
+    const messages = this.messageService.findAll();
+
+    // Emit the messages to all connected clients
+    this.server.sockets.emit('message', messages);
+
+    // Return the messages
+    return messages;
   }
 
+  // Event handler for 'join' WebSocket even
   @SubscribeMessage('join')
   joinRoom(
     @MessageBody('name') name: string,
     @ConnectedSocket() client: Socket,
   ) {
-    return this.messageService.identify(name, client.id);
+    // Call messageService to identify the client by name and associate with the client's id
+    this.messageService.identify(name, client.id);
+    this.server.emit('message', `User ${client.id} has joined the chat`);
   }
 
+  // Event handler for 'disconnect' WebSocket event
   @SubscribeMessage('disconnect')
   handleDisconnect(@ConnectedSocket() client: Socket) {
+    // Emit a message when a user disconnects
     this.server.emit('message', `User ${client.id} has left the chat`);
   }
 
+  // Event handler for 'typing' WebSocket event
   @SubscribeMessage('typing')
   async typing(
     @MessageBody('typing') isTyping: boolean,
     @ConnectedSocket() client: Socket,
   ) {
+    // Call messageService to get the name associated with the client's id
     const name = await this.messageService.getClientByName(client.id);
     client.broadcast.emit('typing', { name, isTyping });
   }
